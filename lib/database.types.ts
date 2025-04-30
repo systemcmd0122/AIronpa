@@ -1,0 +1,34 @@
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+
+export interface Database {
+  public: {
+    Tables: {
+      debate_results: {
+        Row: {
+          id: string
+          username: string
+          topic: string
+          conversation: Json
+          is_ai_defeated: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          username: string
+          topic: string
+          conversation: Json
+          is_ai_defeated: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          username?: string
+          topic?: string
+          conversation?: Json
+          is_ai_defeated?: boolean
+          created_at?: string
+        }
+      }
+    }
+  }
+}

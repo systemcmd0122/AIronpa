@@ -1,0 +1,235 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+ 
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+ 
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+ 
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+ 
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+ 
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+ 
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+ 
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+ 
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+ 
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --ring: 215 20.2% 65.1%;
+ 
+    --radius: 0.5rem;
+  }
+
+  /* モバイル対応の基本設定 */
+  @media (max-width: 767px) {
+    html {
+      font-size: 14px;
+    }
+
+    input, button {
+      font-size: 16px !important; /* iOSでズームを防ぐ */
+    }
+
+    .touch-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+ 
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+ 
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+ 
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+ 
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+ 
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+ 
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+ 
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+ 
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+ 
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 85.7% 97.3%;
+ 
+    --ring: 217.2 32.6% 17.5%;
+  }
+}
+ 
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* カスタムアニメーション */
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(100%);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(0.95);
+    filter: brightness(120%);
+  }
+}
+
+@keyframes spin-pulse {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(0.9);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes gradient-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes bounce-fade {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translateY(-20%);
+    opacity: 1;
+  }
+}
+
+.loading-container {
+  @apply flex items-center justify-center space-x-2;
+}
+
+.loading-dot {
+  @apply h-2 w-2 rounded-full;
+  animation: bounce-fade 1s infinite;
+  background: linear-gradient(45deg, #3b82f6, #2563eb);
+  background-size: 200% 200%;
+  animation: bounce-fade 1s infinite, gradient-flow 2s ease infinite;
+}
+
+.loading-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.loading-pulse {
+  @apply relative inline-flex;
+}
+
+.loading-pulse::before {
+  content: '';
+  @apply absolute inset-0 rounded-full;
+  background: linear-gradient(45deg, #3b82f6, #2563eb);
+  background-size: 200% 200%;
+  animation: pulse-glow 2s ease-in-out infinite, gradient-flow 2s ease infinite;
+}
+
+.loading-spinner {
+  @apply relative w-6 h-6;
+  animation: spin-pulse 1.5s linear infinite;
+}
+
+.loading-spinner::before,
+.loading-spinner::after {
+  content: '';
+  @apply absolute inset-0 rounded-full;
+  background: linear-gradient(45deg, #3b82f6, #2563eb);
+  background-size: 200% 200%;
+  animation: gradient-flow 2s ease infinite;
+}
+
+.loading-spinner::after {
+  @apply inset-1;
+  background: hsl(var(--background));
+}
+
+/* チャットインターフェース用のアニメーション */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-delayOne {
+  animation-delay: 0.1s;
+}
+
+.animate-delayTwo {
+  animation-delay: 0.2s;
+}
+
+.animate-delayThree {
+  animation-delay: 0.3s;
+}
+
+.scrollbar-custom {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(155, 155, 155, 0.5) transparent;
+}
+
+.scrollbar-custom::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-custom::-webkit-scrollbar-thumb {
+  background-color: rgba(155, 155, 155, 0.5);
+  border-radius: 20px;
+  border: transparent;
+}
