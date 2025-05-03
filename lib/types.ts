@@ -1,7 +1,7 @@
 export interface Message {
   role: "user" | "assistant"
   content: string
-  timestamp?: Date
+  timestamp: Date
 }
 
 export interface ChatState {
@@ -14,7 +14,7 @@ export interface ChatState {
 export interface UserData {
   username: string
   topic: string
-  stance: "agree" | "disagree"  // 追加：ユーザーの立場（賛成・反対）
+  stance: "agree" | "disagree"
 }
 
 export interface DebateResultResponse {
@@ -24,4 +24,10 @@ export interface DebateResultResponse {
 
 export interface SurrenderResponse {
   message: string
+}
+
+export interface AIDebateMessage {
+  role: "agree" | "disagree"
+  content: string
+  timestamp: Date
 }
