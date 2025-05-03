@@ -334,7 +334,7 @@ export default function Home() {
         <motion.div variants={titleVariants}>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold inline-block">
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-primary/80 to-primary/60">
-              AIロンパ
+              君はAIを論破できる？
             </span>
           </h1>
         </motion.div>
