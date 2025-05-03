@@ -15,56 +15,63 @@ import {
   Brain, 
   RefreshCw, 
   Send,
-  ThumbsUp,
-  ThumbsDown,
   MessagesSquare,
   ChevronLeft,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Bot,
+  Lock,
+  Unlock
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import type { AIDebateMessage } from "@/lib/types"
+import { Slider } from "@/components/ui/slider"
+import { Switch } from "@/components/ui/switch"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface AIDebateProps {
   onReset: () => void
+  isAIvsAI?: boolean
 }
 
-const getMessageStyles = (role: "agree" | "disagree") => {
-  return {
-    container: cn(
-      "group relative rounded-2xl px-4 py-6 transition-all duration-300",
-      "hover:shadow-lg backdrop-blur-sm",
-      role === "agree" 
-        ? "bg-gradient-to-br from-emerald-500/90 via-emerald-600/80 to-emerald-700/90 text-white"
-        : "bg-gradient-to-br from-rose-500/90 via-rose-600/80 to-rose-700/90 text-white"
-    ),
-    avatar: cn(
-      "ring-2 transition-all duration-300 group-hover:scale-105",
-      role === "agree"
-        ? "ring-emerald-200 bg-emerald-100"
-        : "ring-rose-200 bg-rose-100"
-    ),
-    badge: cn(
-      "absolute -top-3 left-4 px-3 py-1 text-xs font-medium rounded-full",
-      "shadow-sm backdrop-blur-sm",
-      role === "agree"
-        ? "bg-emerald-200/90 text-emerald-900"
-        : "bg-rose-200/90 text-rose-900"
-    ),
-    timestamp: "text-xs text-white/80 font-medium",
-    content: "prose prose-invert max-w-none text-[15px] leading-relaxed"
-  }
+const styles = {
+  messageBox: (role: "agree" | "disagree") => cn(
+    "relative p-4 rounded-lg mb-4",
+    "transition-all duration-200",
+    "max-w-[80%]",
+    role === "agree" 
+      ? "bg-blue-500/10 text-blue-900 dark:text-blue-100 ml-0 mr-auto"
+      : "bg-red-500/10 text-red-900 dark:text-red-100 ml-auto mr-0"
+  ),
+  aiAvatar: (role: "agree" | "disagree") => cn(
+    "absolute top-4",
+    "bg-transparent",
+    role === "agree" 
+      ? "left-[-3rem]"
+      : "right-[-3rem]"
+  ),
+  badge: (role: "agree" | "disagree") => cn(
+    "inline-block px-2 py-0.5 rounded text-xs font-medium mb-1",
+    role === "agree"
+      ? "bg-blue-200/90 text-blue-900"
+      : "bg-red-200/90 text-red-900"
+  ),
+  timestamp: "text-xs text-muted-foreground font-medium",
+  content: "prose max-w-none text-[15px] leading-relaxed"
 }
 
-export default function AIDebate({ onReset }: AIDebateProps) {
+export default function AIDebate({ onReset, isAIvsAI = false }: AIDebateProps) {
   const [topic, setTopic] = useState("")
   const [debateType, setDebateType] = useState<"logical" | "casual">("logical")
   const [messages, setMessages] = useState<AIDebateMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isDebating, setIsDebating] = useState(false)
   const [showScrollButton, setShowScrollButton] = useState(false)
+  const [debateSpeed, setDebateSpeed] = useState(3)
+  const [isContinueLocked, setIsContinueLocked] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const autoDebateRef = useRef<NodeJS.Timeout | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -86,6 +93,28 @@ export default function AIDebate({ onReset }: AIDebateProps) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
     }
   }, [messages, showScrollButton])
+
+  useEffect(() => {
+    return () => {
+      if (autoDebateRef.current) {
+        clearTimeout(autoDebateRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isAIvsAI && isDebating && !isLoading && messages.length > 0 && !isContinueLocked) {
+      const delay = (6 - debateSpeed) * 1000
+      autoDebateRef.current = setTimeout(() => {
+        continueDebate()
+      }, delay)
+    }
+    return () => {
+      if (autoDebateRef.current) {
+        clearTimeout(autoDebateRef.current)
+      }
+    }
+  }, [isAIvsAI, isDebating, isLoading, messages, debateSpeed, isContinueLocked])
 
   const startDebate = async () => {
     if (!topic.trim()) {
@@ -133,7 +162,6 @@ export default function AIDebate({ onReset }: AIDebateProps) {
         timestamp: new Date(),
       }])
 
-      // 1回目の反論を自動的に取得
       const counterResponse = await fetch("/api/ai-debate", {
         method: "POST",
         headers: {
@@ -174,7 +202,7 @@ export default function AIDebate({ onReset }: AIDebateProps) {
   }
 
   const continueDebate = async () => {
-    if (messages.length === 0) return
+    if (messages.length === 0 || isContinueLocked) return
 
     setIsLoading(true)
     try {
@@ -195,6 +223,16 @@ export default function AIDebate({ onReset }: AIDebateProps) {
       }
 
       const data = await response.json()
+      
+      if (data.debateEnded) {
+        setIsDebating(false)
+        toast({
+          title: "議論終了",
+          description: data.endReason,
+        })
+        return
+      }
+
       setMessages(prev => [...prev, {
         role: messages[messages.length - 1].role === "agree" ? "disagree" : "agree",
         content: data.content,
@@ -213,9 +251,13 @@ export default function AIDebate({ onReset }: AIDebateProps) {
   }
 
   const handleReset = () => {
+    if (autoDebateRef.current) {
+      clearTimeout(autoDebateRef.current)
+    }
     setTopic("")
     setMessages([])
     setIsDebating(false)
+    setIsContinueLocked(false)
     onReset()
   }
 
@@ -241,270 +283,242 @@ export default function AIDebate({ onReset }: AIDebateProps) {
   return (
     <motion.div 
       className="w-full max-w-5xl"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={fadeIn}
     >
-      <Card className="shadow-xl border-2">
-        <CardHeader className="border-b bg-card/50 backdrop-blur-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <CardTitle className="flex items-center gap-2 text-2xl font-bold">
-              <Brain className="w-6 h-6" />
-              AI同士の議論
-            </CardTitle>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={handleReset}
-                className="rounded-full transition-colors"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                リセット
-              </Button>
-            </div>
+      <Card className="relative">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" onClick={handleReset} className="gap-2">
+              <ChevronLeft className="h-4 w-4" />
+              戻る
+            </Button>
+            {isAIvsAI && (
+              <div className="flex items-center gap-4">
+                <div className="flex flex-col items-end gap-1">
+                  <Label className="text-sm">議論の速さ</Label>
+                  <Slider
+                    value={[debateSpeed]}
+                    onValueChange={(value) => setDebateSpeed(value[0])}
+                    min={1}
+                    max={5}
+                    step={1}
+                    disabled={!isDebating || isContinueLocked}
+                    className="w-32"
+                  />
+                </div>
+                {isDebating && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-2 px-2">
+                        <Switch
+                          checked={!isContinueLocked}
+                          onCheckedChange={(checked) => setIsContinueLocked(!checked)}
+                          disabled={!isDebating}
+                          className="data-[state=checked]:bg-primary"
+                        />
+                        {isContinueLocked ? (
+                          <Lock className="h-5 w-5 text-muted-foreground" />
+                        ) : (
+                          <Unlock className="h-5 w-5 text-muted-foreground" />
+                        )}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>継続を{isContinueLocked ? "ロック" : "自動化"}する</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+            )}
           </div>
+          <CardTitle className="flex items-center justify-center gap-2 pt-2">
+            <Brain className="h-6 w-6" />
+            {isAIvsAI ? "AI vs AI 議論" : "議論フォーム"}
+          </CardTitle>
         </CardHeader>
 
-        <CardContent className="p-0">
-          <div className="p-6 border-b bg-muted/30">
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Label>議論のタイプ</Label>
-                  {isDebating && (
-                    <div className="flex items-center text-xs text-amber-500">
-                      <AlertCircle className="w-3 h-3 mr-1" />
-                      議論開始後は変更できません
-                    </div>
-                  )}
-                </div>
-                <RadioGroup
-                  value={debateType}
-                  onValueChange={(value) => !isDebating && setDebateType(value as "logical" | "casual")}
-                  className="flex flex-col sm:flex-row gap-4"
-                >
-                  <div className={cn(
-                    "flex items-center space-x-2",
-                    isDebating && debateType !== "logical" && "opacity-50"
-                  )}>
-                    <RadioGroupItem 
-                      value="logical" 
-                      id="logical" 
-                      disabled={isDebating}
-                    />
-                    <Label 
-                      htmlFor="logical" 
-                      className={cn(
-                        "font-medium cursor-pointer",
-                        isDebating && !isDebating && "cursor-not-allowed"
-                      )}
-                    >
-                      論理的議論
-                      <span className="block text-xs text-muted-foreground">
-                        厳密な論理と証拠に基づく議論
-                      </span>
-                    </Label>
+        <div className="p-6 border-b bg-muted/30">
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Label>議論のタイプ</Label>
+                {isDebating && (
+                  <div className="flex items-center text-xs text-amber-500">
+                    <AlertCircle className="w-3 h-3 mr-1" />
+                    議論開始後は変更できません
                   </div>
-                  <div className={cn(
-                    "flex items-center space-x-2",
-                    isDebating && debateType !== "casual" && "opacity-50"
-                  )}>
-                    <RadioGroupItem 
-                      value="casual" 
-                      id="casual" 
-                      disabled={isDebating}
-                    />
-                    <Label 
-                      htmlFor="casual" 
-                      className={cn(
-                        "font-medium cursor-pointer",
-                        isDebating && !isDebating && "cursor-not-allowed"
-                      )}
-                    >
-                      カジュアル議論
-                      <span className="block text-xs text-muted-foreground">
-                        より柔軟でオープンな議論
-                      </span>
-                    </Label>
-                  </div>
-                </RadioGroup>
+                )}
               </div>
-
-              <div className="space-y-2">
-                <Label>議論のテーマ</Label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="議論のテーマを入力..."
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
+              <RadioGroup
+                value={debateType}
+                onValueChange={(value) => !isDebating && setDebateType(value as "logical" | "casual")}
+                className="flex flex-col sm:flex-row gap-4"
+              >
+                <div className={cn(
+                  "flex items-center space-x-2",
+                  isDebating && debateType !== "logical" && "opacity-50"
+                )}>
+                  <RadioGroupItem 
+                    value="logical" 
+                    id="logical" 
                     disabled={isDebating}
-                    className="rounded-full"
                   />
-                  <Button
-                    onClick={startDebate}
-                    disabled={isLoading || isDebating || !topic.trim()}
-                    className="rounded-full min-w-[100px]"
-                  >
-                    {isLoading ? (
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                      </motion.div>
-                    ) : (
-                      <span className="flex items-center gap-2">
-                        <MessagesSquare className="h-4 w-4" />
-                        開始
-                      </span>
+                  <Label 
+                    htmlFor="logical" 
+                    className={cn(
+                      "font-medium cursor-pointer",
+                      isDebating && !isDebating && "cursor-not-allowed"
                     )}
-                  </Button>
+                  >
+                    論理的議論
+                    <span className="block text-xs text-muted-foreground">
+                      厳密な論理と証拠に基づく議論
+                    </span>
+                  </Label>
                 </div>
+                <div className={cn(
+                  "flex items-center space-x-2",
+                  isDebating && debateType !== "casual" && "opacity-50"
+                )}>
+                  <RadioGroupItem 
+                    value="casual" 
+                    id="casual" 
+                    disabled={isDebating}
+                  />
+                  <Label 
+                    htmlFor="casual" 
+                    className={cn(
+                      "font-medium cursor-pointer",
+                      isDebating && !isDebating && "cursor-not-allowed"
+                    )}
+                  >
+                    カジュアル議論
+                    <span className="block text-xs text-muted-foreground">
+                      より柔軟でオープンな議論
+                    </span>
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            <div className="space-y-2">
+              <Label>議論のテーマ</Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="議論のテーマを入力..."
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  disabled={isDebating}
+                  className="rounded-full"
+                />
+                <Button
+                  onClick={startDebate}
+                  disabled={isLoading || isDebating || !topic.trim()}
+                  className="rounded-full min-w-[100px]"
+                >
+                  {isLoading ? (
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </motion.div>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <MessagesSquare className="h-4 w-4" />
+                      開始
+                    </span>
+                  )}
+                </Button>
               </div>
             </div>
           </div>
+        </div>
 
-          <ScrollArea 
-            ref={scrollAreaRef}
-            className="h-[60vh] px-4 lg:px-6 relative scrollbar-custom"
-          >
-            {messages.length > 0 ? (
-              <div className="py-6 space-y-8">
-                <AnimatePresence initial={false}>
-                  {messages.map((message, index) => {
-                    const styles = getMessageStyles(message.role)
-                    return (
-                      <motion.div
-                        key={index}
-                        className={cn(
-                          "flex",
-                          message.role === "agree" ? "justify-start" : "justify-end",
-                        )}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                      >
-                        <div
-                          className={cn(
-                            "flex gap-3 max-w-[90%] lg:max-w-[80%]",
-                            message.role === "agree" ? "flex-row" : "flex-row-reverse"
-                          )}
-                        >
-                          <div className="relative z-10">
-                            <Avatar className={cn(
-                              styles.avatar,
-                              "h-10 w-10 shrink-0 select-none"
-                            )}>
-                              <AvatarFallback>
-                                {message.role === "agree" ? 
-                                  <ThumbsUp className="w-5 h-5" /> : 
-                                  <ThumbsDown className="w-5 h-5" />
-                                }
-                              </AvatarFallback>
-                              <AvatarImage 
-                                src="/ai.png" 
-                                alt={message.role === "agree" ? "賛成AI" : "反対AI"}
-                                className="object-cover"
-                              />
-                            </Avatar>
-                          </div>
-                          <div className={styles.container}>
-                            <div className={styles.badge}>
-                              {message.role === "agree" ? "賛成派" : "反対派"}
-                            </div>
-                            <div className="flex items-center justify-between gap-2 mb-2">
-                              <span className="text-sm font-semibold">
-                                {message.role === "agree" ? "賛成AI" : "反対AI"}
-                              </span>
-                              <span className={styles.timestamp}>
-                                {formatDate(message.timestamp)}
-                              </span>
-                            </div>
-                            <div className={styles.content}>
-                              {message.content}
-                            </div>
-                          </div>
+        <ScrollArea 
+          ref={scrollAreaRef}
+          className="h-[60vh] px-6 lg:px-8 relative scrollbar-custom"
+        >
+          {messages.length > 0 ? (
+            <div className="py-4 relative">
+              <AnimatePresence>
+                {messages.map((message, index) => (
+                  <motion.div
+                    key={index}
+                    className={cn(
+                      "relative max-w-full",
+                      message.role === "agree" ? "pl-12 pr-4" : "pr-12 pl-4"
+                    )}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <div className={styles.messageBox(message.role)}>
+                      <div className={styles.aiAvatar(message.role)}>
+                        <Avatar>
+                          <AvatarFallback className="bg-background">
+                            <Bot className="w-5 h-5" />
+                          </AvatarFallback>
+                          <AvatarImage 
+                            src={"/ai.png"}
+                            alt={message.role === "agree" ? "賛成AI" : "反対AI"}
+                          />
+                        </Avatar>
+                      </div>
+                      <div>
+                        <div className={styles.badge(message.role)}>
+                          {message.role === "agree" ? "賛成派" : "反対派"}
                         </div>
-                      </motion.div>
-                    )
-                  })}
-
-                  {isLoading && (
-                    <motion.div 
-                      className="flex justify-start"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                    >
-                      <div className="flex gap-3">
-                        <div className="relative z-10">
-                          <Avatar className={getMessageStyles(messages[messages.length - 1]?.role === "agree" ? "disagree" : "agree").avatar}>
-                            <AvatarFallback>
-                              {messages[messages.length - 1]?.role === "agree" ? 
-                                <ThumbsDown className="w-5 h-5" /> : 
-                                <ThumbsUp className="w-5 h-5" />
-                              }
-                            </AvatarFallback>
-                            <AvatarImage 
-                              src="/ai.png" 
-                              alt="AI" 
-                              className="object-cover"
-                            />
-                          </Avatar>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="text-sm font-semibold">
+                            {message.role === "agree" ? "賛成AI" : "反対AI"}
+                          </span>
+                          <span className={styles.timestamp}>
+                            {formatDate(new Date(message.timestamp))}
+                          </span>
                         </div>
-                        <div className={cn(
-                          getMessageStyles(messages[messages.length - 1]?.role === "agree" ? "disagree" : "agree").container,
-                          "min-w-[120px] flex items-center justify-center"
-                        )}>
-                          <div className="flex gap-2">
-                            <div className="w-2 h-2 rounded-full bg-current animate-bounce [animation-delay:-0.3s]" />
-                            <div className="w-2 h-2 rounded-full bg-current animate-bounce [animation-delay:-0.15s]" />
-                            <div className="w-2 h-2 rounded-full bg-current animate-bounce" />
-                          </div>
+                        <div className={styles.content}>
+                          {message.content}
                         </div>
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                <div ref={messagesEndRef} />
-              </div>
-            ) : (
-              <motion.div 
-                className="h-full flex flex-col items-center justify-center text-center p-8"
-                {...fadeIn}
-              >
-                <Brain className="w-12 h-12 text-muted-foreground/50 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">議論の準備ができました</h3>
-                <p className="text-muted-foreground text-sm max-w-md">
-                  テーマを入力して議論を開始してください。AIが賛成派と反対派に分かれて議論を展開します。
-                </p>
-              </motion.div>
-            )}
-          </ScrollArea>
-
-          {showScrollButton && (
-            <Button
-              variant="secondary"
-              size="icon"
-              className={cn(
-                "fixed bottom-24 right-6 lg:bottom-8",
-                "rounded-full shadow-lg hover:shadow-xl",
-                "transition-all duration-200",
-                "bg-background/80 backdrop-blur-sm",
-                "z-10"
-              )}
-              onClick={scrollToBottom}
-            >
-              <ArrowDown className="h-4 w-4" />
-            </Button>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              <div ref={messagesEndRef} />
+            </div>
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center text-center p-8 text-muted-foreground">
+              <Sparkles className="h-12 w-12 mb-4" />
+              <p className="text-lg font-medium mb-2">議論の準備ができました</p>
+              <p className="text-sm">
+                テーマを入力して、AIとの議論を開始してください。
+                {isAIvsAI && "AIどうしの議論を見守りましょう。"}
+              </p>
+            </div>
           )}
-        </CardContent>
+        </ScrollArea>
+
+        {showScrollButton && (
+          <Button
+            size="icon"
+            variant="outline"
+            className="absolute bottom-20 right-4 rounded-full w-8 h-8 transition-all duration-200 bg-background/80 backdrop-blur-sm z-10"
+            onClick={scrollToBottom}
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+        )}
 
         <CardFooter className="p-4 border-t bg-card/50 backdrop-blur-sm">
-          <div className="w-full flex justify-center">
+          <div className="w-full flex justify-center items-center gap-4">
             <Button
               onClick={continueDebate}
-              disabled={!isDebating || isLoading || messages.length === 0}
+              disabled={!isDebating || isLoading || messages.length === 0 || (isAIvsAI && !isContinueLocked)}
               size="lg"
               className={cn(
                 "rounded-full transition-all duration-300",
@@ -512,26 +526,38 @@ export default function AIDebate({ onReset }: AIDebateProps) {
                 "disabled:opacity-50 disabled:cursor-not-allowed",
                 isDebating && !isLoading
                   ? "bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg hover:shadow-xl hover:scale-105"
-                  : "bg-gray-200 dark:bg-gray-800"
+                  : ""
               )}
             >
               {isLoading ? (
-                <span className="flex items-center gap-2">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  >
-                    <Sparkles className="w-5 h-5" />
-                  </motion.div>
-                  生成中...
-                </span>
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                >
+                  <RefreshCw className="h-5 w-5" />
+                </motion.div>
               ) : (
                 <span className="flex items-center gap-2">
-                  <Send className="w-5 h-5" />
-                  議論を続ける
+                  <Send className="h-5 w-5" />
+                  継続
                 </span>
               )}
             </Button>
+
+            {isAIvsAI && isDebating && (
+              <div className="flex items-center gap-2">
+                <Label className="text-sm whitespace-nowrap">速度: </Label>
+                <Slider
+                  value={[debateSpeed]}
+                  onValueChange={(value) => setDebateSpeed(value[0])}
+                  min={1}
+                  max={5}
+                  step={1}
+                  disabled={!isDebating || isContinueLocked}
+                  className="w-24"
+                />
+              </div>
+            )}
           </div>
         </CardFooter>
       </Card>
